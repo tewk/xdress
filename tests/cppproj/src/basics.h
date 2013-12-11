@@ -231,9 +231,22 @@ Untemplated unt = Untemplated();
 // Template member function also missed by GCC-XML
 int untrtn = unt.templated_method<float>(65.0);
 
+typedef enum TypeA
+{
+  TYPEA_A = 1001,
+  TYPEA_B = 1001,
+} TypeA;
+
+template< TypeA > class ThingA {
+
+};
+
 #ifdef XDRESS
 std::vector<double> _temp0;
 std::vector< std::vector<double> > _temp1;
+ThingA< TYPEA_A> thinga;
+ThingA< TYPEA_B> thingb;
+TypeA typething;
 #endif
 
 
