@@ -1287,7 +1287,13 @@ def clang_describe_class(cls):
     if cls.kind == CursorKind.CLASS_DECL:
         construct = 'class'
     elif cls.kind == CursorKind.STRUCT_DECL:
-        construct = 'struct'
+        # construct = 'struct' causes the xdress cython plugin to use malloc instead
+        # of new, in c++ structs should have construct = 'class' 
+        #if language == 'c++':
+        if True:
+            construct = 'class'
+        else:
+            consturct = 'struct'
     else:
         raise ValueError('bad class kind {0}'.format(cls.kind.name))
     typ = cls.spelling
