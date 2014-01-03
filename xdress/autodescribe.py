@@ -1508,6 +1508,10 @@ def clang_describe_expression(exp):
         try:
             return float(s)
         except ValueError:
+            if ( s == 'true' ):
+                return s;
+            if ( s == 'false' ):
+                return s;
             raise NotImplementedError('unhandled expression "{0}"'.format(s))
 
 
