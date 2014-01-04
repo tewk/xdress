@@ -1198,7 +1198,7 @@ def clang_find_class(tu, name, ts, namespace=None, filename=None, onlyin=None):
     elif len(decls)>1:
         raise ValueError("class '{0}' found more than once ({2} times) {1}".format(name, len(decls), where))
     else:
-        raise ValueError("class '{0}' found, but specialization {1} not found{1}".format(cls, name, where))
+        raise ValueError("class '{0}' found, but specialization {1} not found{2}".format(basename, name, where))
 
 def clang_find_function(tu, name, ts, namespace=None, filename=None, onlyin=None):
     """Find all nodes corresponding to a given function.  If there is a separate declaration
@@ -1315,21 +1315,22 @@ def clang_describe_class(cls):
                 methods[(dest,)] = None
             elif kind == CursorKind.FIELD_DECL:
                 attrs[kid.spelling] = clang_describe_type(kid.type)
-    # Make sure defaulted methods are described
-    if cls.has_default_constructor():
-        # Check if any user defined constructors act as a default constructor
-        for method in methods.keys():
-            if method[0] == cons:
-                for arg in method[1:]:
-                    if len(arg) < 3:
+    if not templated:
+        # Make sure defaulted methods are described
+        if cls.has_default_constructor():
+            # Check if any user defined constructors act as a default constructor
+            for method in methods.keys():
+                if method[0] == cons:
+                    for arg in method[1:]:
+                        if len(arg) < 3:
+                            break
+                    else:
+                        # All arguments have defaults, so no need to generate a default manually
                         break
-                else:
-                    # All arguments have defaults, so no need to generate a default manually
-                    break
-        else:
-            methods[(cons,)] = None
-    if cls.has_simple_destructor():
-        methods[(dest,)] = None
+            else:
+                methods[(cons,)] = None
+        if cls.has_simple_destructor():
+            methods[(dest,)] = None
     # Put everything together
     return {'name': typ, 'type': typ, 'namespace': clang_parent_namespace(cls),
             'parents': parents, 'attrs': attrs, 'methods': methods, 'construct': construct}
