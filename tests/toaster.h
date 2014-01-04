@@ -25,6 +25,11 @@ template<class T, int i=0> struct Base {
 template<bool B=false> class Point {};
 template<> class Point<true> {};
 
+enum Space {
+  TWO_D,
+  THREE_D
+};
+
 // Toaster class
 class Toaster : Base<int,6+1> {
 public:
@@ -40,6 +45,8 @@ public:
   float rate;
   int (*fp)(float);
   std::vector<char> vec;
+
+  int make_space( Space d = TWO_D );
 
   // Public access functions
   int make_toast(std::string when, unsigned int nslices=1, double dub=3e-8);

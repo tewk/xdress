@@ -1303,18 +1303,18 @@ def clang_describe_class(cls):
     for kid in cls.get_children(all_spec_bodies=1):
         kind = kid.kind
         if kind == CursorKind.CXX_BASE_SPECIFIER:
-            parents.append(clang_describe_type(kid.type))
+            parents.append(clang_describe_type(kid.type, kid))
         elif kid.access == AccessKind.PUBLIC:
             if kind == CursorKind.CXX_METHOD:
                 # TODO: For now, we ignore operators
                 if not _operator_pattern.match(kid.spelling):
-                    methods[clang_describe_args(kid)] = clang_describe_type(kid.result_type)
+                    methods[clang_describe_args(kid)] = clang_describe_type(kid.result_type, kid)
             elif kind == CursorKind.CONSTRUCTOR:
                 methods[(cons,)+clang_describe_args(kid)[1:]] = None
             elif kind == CursorKind.DESTRUCTOR:
                 methods[(dest,)] = None
             elif kind == CursorKind.FIELD_DECL:
-                attrs[kid.spelling] = clang_describe_type(kid.type)
+                attrs[kid.spelling] = clang_describe_type(kid.type, kid)
     # Make sure defaulted methods are described
     if cls.has_default_constructor():
         # Check if any user defined constructors act as a default constructor
@@ -1398,7 +1398,7 @@ def clang_describe_functions(funcs):
 def clang_describe_function(func):
     """Describe the function at the given clang AST node."""
     assert func.kind == CursorKind.FUNCTION_DECL
-    signatures = {clang_describe_args(func): clang_describe_type(func.result_type)}
+    signatures = {clang_describe_args(func): clang_describe_type(func.result_type, func)}
     name = next(iter(signatures))[0]
     return {'name': name, 'namespace': clang_parent_namespace(func), 'signatures': signatures}
 
@@ -1408,14 +1408,14 @@ def clang_describe_args(func):
     else:
         descs = [func.spelling]
     for arg in func.get_arguments():
-        desc = [arg.spelling,clang_describe_type(arg.type)]
+        desc = [arg.spelling,clang_describe_type(arg.type, arg)]
         default = arg.default_argument
         if default is not None:
             desc.append(clang_describe_expression(default))
         descs.append(tuple(desc))
     return tuple(descs)
 
-def clang_describe_type(typ):
+def clang_describe_type(typ, parent):
     """Describe the type reference at the given cursor"""
     typ = typ.get_canonical()
     kind = typ.kind
@@ -1432,21 +1432,24 @@ def clang_describe_type(typ):
             else:
                 desc = cls
         elif kind == TypeKind.LVALUEREFERENCE:
-            desc = (clang_describe_type(typ.get_pointee()), '&')
+            desc = (clang_describe_type(typ.get_pointee(), parent), '&')
         elif kind == TypeKind.POINTER:
             p = typ.get_pointee()
             if p.kind == TypeKind.FUNCTIONPROTO:
                 desc = ('function_pointer',
-                        tuple(('_{0}'.format(i),clang_describe_type(arg)) for i,arg in enumerate(p.argument_types())),
-                        clang_describe_type(p.get_result()))
+                        tuple(('_{0}'.format(i),clang_describe_type(arg, parent)) for i,arg in enumerate(p.argument_types())),
+                        clang_describe_type(p.get_result(), parent))
             else:
-                desc = (clang_describe_type(p), '*')
+                desc = (clang_describe_type(p, parent), '*')
         elif kind == TypeKind.FUNCTIONPROTO:
             desc = ('function',
-                    tuple(('_{0}'.format(i),clang_describe_type(arg)) for i,arg in enumerate(typ.argument_types())),
-                    clang_describe_type(typ.get_result()))
+                    tuple(('_{0}'.format(i),clang_describe_type(arg, parent)) for i,arg in enumerate(typ.argument_types())),
+                    clang_describe_type(typ.get_result(), parent))
+        elif kind == TypeKind.ENUM:
+            desc = typ.spelling
         else:
-            raise NotImplementedError('type kind {0}: {1}'.format(typ.kind, typ.spelling))
+            parentloc = parent.location if parent else None
+            raise NotImplementedError('type kind {0}: {1} at {2}'.format(typ.kind, typ.spelling, parentloc))
     if typ.is_const_qualified():
         return (desc, 'const')
     else:
@@ -1495,7 +1498,7 @@ _clang_expressions = {'true': True, 'false': False}
 
 def clang_describe_template_arg(arg):
     if arg.kind == CursorKind.TYPE_TEMPLATE_ARG:
-        return clang_describe_type(arg.type)
+        return clang_describe_type(arg.type, arg)
     try:
         # ast.literal_eval isn't precisely correct, since there are Python
         # literals which aren't valid C++, but it should be close enough.
@@ -1521,6 +1524,7 @@ def clang_describe_expression(exp):
     try:
         return _clang_expressions[s]
     except KeyError:
+        # Need typesystem ts here so we can lookup enum values.
         raise NotImplementedError('unhandled expression "{0}" at {1}'.format(s, exp.location))
 
 
