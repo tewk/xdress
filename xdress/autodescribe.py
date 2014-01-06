@@ -295,6 +295,7 @@ if clang is not None:
         TypeKind.FLOAT      : 'float32',
         TypeKind.DOUBLE     : 'float64',
         TypeKind.LONGDOUBLE : 'longdouble',
+        TypeKind.ENUM       : 'int',
         }
 
 if 1:
@@ -844,6 +845,21 @@ class GccxmlClassDescriber(GccxmlBaseDescriber):
             top-level class node is found and visited.
 
         """
+        if False:
+          # Template parameters can be enums values
+          for n in root.iterfind("Enumeration[@name='{0}']".format(self.name)):
+              if n.attrib['file'] in self.onlyin:
+                  ns = self.context(n.attrib['context'])
+                  if ns is not None and ns != "::":
+                      self.desc['namespace'] = ns
+                  # Grab the type and put it in
+                  self.desc['type'] = self.visit_enumeration(n)
+                  break
+              else:
+                  msg = ("{0} autodescribing failed: found variable in {1!r} but "
+                        "expected it in {2!r}.")
+                  msg = msg.format(self.name, node.attrib['file'], self.onlyin)
+                  raise RuntimeError(msg)
         if node is None:
             query = "Class[@name='{0}']".format(self.ts.gccxml_type(self.name))
             node = self._root.find(query)
@@ -1201,7 +1217,7 @@ def clang_find_class(tu, name, ts, namespace=None, filename=None, onlyin=None):
     elif len(decls)>1:
         raise ValueError("class '{0}' found more than once ({2} times) {1}".format(name, len(decls), where))
     else:
-        raise ValueError("class '{0}' found, but specialization {1} not found{1}".format(cls, name, where))
+        raise ValueError("class '{0}' found, but specialization {1} not found{1}".format(decls, name, where))
 
 def clang_find_function(tu, name, ts, namespace=None, filename=None, onlyin=None):
     """Find all nodes corresponding to a given function.  If there is a separate declaration
@@ -1292,6 +1308,7 @@ def clang_describe_class(cls):
         construct = 'class'
     elif cls.kind == CursorKind.STRUCT_DECL:
         construct = 'struct'
+        construct = 'class'
     else:
         raise ValueError('bad class kind {0}'.format(cls.kind.name))
     typ = cls.spelling
@@ -1317,22 +1334,23 @@ def clang_describe_class(cls):
             elif kind == CursorKind.DESTRUCTOR:
                 methods[(dest,)] = None
             elif kind == CursorKind.FIELD_DECL:
-                attrs[kid.spelling] = clang_describe_type(kid.type, kid.location)
-    # Make sure defaulted methods are described
-    if cls.has_default_constructor():
-        # Check if any user defined constructors act as a default constructor
-        for method in methods.keys():
-            if method[0] == cons:
-                for arg in method[1:]:
-                    if len(arg) < 3:
+                attrs[kid.spelling] = clang_describe_type(kid.type)
+    if not templated:
+        # Make sure defaulted methods are described
+        if cls.has_default_constructor():
+            # Check if any user defined constructors act as a default constructor
+            for method in methods.keys():
+                if method[0] == cons:
+                    for arg in method[1:]:
+                        if len(arg) < 3:
+                            break
+                    else:
+                        # All arguments have defaults, so no need to generate a default manually
                         break
-                else:
-                    # All arguments have defaults, so no need to generate a default manually
-                    break
-        else:
-            methods[(cons,)] = None
-    if cls.has_simple_destructor():
-        methods[(dest,)] = None
+            else:
+                methods[(cons,)] = None
+        if cls.has_simple_destructor():
+            methods[(dest,)] = None
     # Put everything together
     return {'name': typ, 'type': typ, 'namespace': clang_parent_namespace(cls),
             'parents': parents, 'attrs': attrs, 'methods': methods, 'construct': construct}

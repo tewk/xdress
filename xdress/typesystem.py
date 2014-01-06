@@ -1387,20 +1387,23 @@ class TypeSystem(object):
     def canon(self, t):
         """Turns the type into its canonical form. See module docs for more information."""
         if isinstance(t, basestring):
-            if t in self.base_types:
-                return t
-            elif t in self.type_aliases:
-                return self.canon(self.type_aliases[t])
-            elif t in self.refined_types:
-                return (self.canon(self.refined_types[t]), t)
-            elif self.isdependent(t):
-                return self._resolve_dependent_type(t)
-            else:
-                _raise_type_error(t)
-                # BELOW this would be for complicated string representations,
-                # such as 'char *' or 'map<nucid, double>'.  Would need to write
-                # the parse_type() function and that might be a lot of work.
-                #parse_type(t)
+            try:
+                return int(t)
+            except:
+                if t in self.base_types:
+                    return t
+                elif t in self.type_aliases:
+                    return self.canon(self.type_aliases[t])
+                elif t in self.refined_types:
+                    return (self.canon(self.refined_types[t]), t)
+                elif self.isdependent(t):
+                    return self._resolve_dependent_type(t)
+                else:
+                    _raise_type_error(t)
+                    # BELOW this would be for complicated string representations,
+                    # such as 'char *' or 'map<nucid, double>'.  Would need to write
+                    # the parse_type() function and that might be a lot of work.
+                    #parse_type(t)
         elif isinstance(t, Sequence):
             t0 = t[0]
             tlen = len(t)

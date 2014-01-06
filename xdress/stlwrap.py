@@ -235,6 +235,185 @@ def gentest_set(t, ts):
                            stlcontainers=ts.stlcontainers)
 
 #
+# Pairs
+#
+_pyxpair = '''# Pair({tclsname}, {uclsname})
+cdef class _Pair{tclsname}{uclsname}:
+    def __cinit__(self, new_pair=True, bint free_pair=True):
+        cdef pair[{tctype}, {uctype}] item
+{tpy2cdecl.indent8}
+{upy2cdecl.indent8}
+
+        # Decide how to init pair, if at all
+        if isinstance(new_pair, _Pair{tclsname}{uclsname}):
+            self.pair_ptr = (<_Pair{tclsname}{uclsname}> new_pair).pair_ptr
+        elif hasattr(new_pair, 'items'):
+            self.pair_ptr = new pair[{tctype}, {uctype}]()
+#{tpy2cbody.indent16}
+#{upy2cbody.indent16}
+#            item = pair[{tctype}, {uctype}]({tpy2crtn}, {upy2crtn})
+#            self.pair_ptr.first = new_pair.items()[0]
+#            self.pair_ptr.second = new_pair.items()[0]
+        elif bool(new_pair):
+            self.pair_ptr = new pair[{tctype}, {uctype}]()
+
+        # Store free_pair
+        self._free_pair = free_pair
+
+#    def first(self):
+#        return self.pair_ptr.first
+#    def second(self):
+#        return self.pair_ptr.second
+
+
+    def __dealloc__(self):
+        if self._free_pair:
+            del self.pair_ptr
+
+class Pair{tclsname}{uclsname}(_Pair{tclsname}{uclsname}, collections.MutableMapping):
+    """Wrapper class for C++ standard library pairs of type <{thumname}, {uhumname}>.
+
+    Parameters
+    ----------
+    new_pair : bool or dict-like
+        Boolean on whether to make a new pair or not, or dict-like object
+        with keys and values which are castable to the appropriate type.
+    free_pair : bool
+        Flag for whether the pointer to the C++ pair should be deallocated
+        when the wrapper is dereferenced.
+    """
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        return "{{ {{0}}: {{1}} }}".format(repr(self.first), repr(self.second))
+
+'''
+
+def genpyx_pair(t, u, ts):
+    """Returns the pyx snippet for a pair of type <t, u>."""
+    t = ts.canon(t)
+    u = ts.canon(u)
+    kw = dict(tclsname=ts.cython_classname(t)[1], uclsname=ts.cython_classname(u)[1],
+              thumname=ts.humanname(t)[1], uhumname=ts.humanname(u)[1],
+              tctype=ts.cython_ctype(t), uctype=ts.cython_ctype(u),
+              tpytype=ts.cython_pytype(t), upytype=ts.cython_pytype(u),
+              tcytype=ts.cython_cytype(t), ucytype=ts.cython_cytype(u),)
+    tisnotinst = ["not isinstance(key, {0})".format(x) for x in ts.from_pytypes[t]]
+    kw['tisnotinst'] = " and ".join(tisnotinst)
+    tc2pykeys = ['tc2pydecl', 'tc2pybody', 'tc2pyrtn']
+    tc2py = ts.cython_c2py('inow_first', t, existing_name="deref(inow).first",
+                           cached=False)
+    kw.update([(k, indentstr(v or '')) for k, v in zip(tc2pykeys, tc2py)])
+    uc2pykeys = ['uc2pydecl', 'uc2pybody', 'uc2pyrtn']
+    uc2py = ts.cython_c2py("v", u, cached=False,
+                           existing_name="deref(self.map_ptr)[k]")
+    kw.update([(k, indentstr(v or '')) for k, v in zip(uc2pykeys, uc2py)])
+    tpy2ckeys = ['tpy2cdecl', 'tpy2cbody', 'tpy2crtn']
+    tpy2c = ts.cython_py2c("key", t)
+    kw.update([(k, indentstr(v or '')) for k, v in zip(tpy2ckeys, tpy2c)])
+    upy2ckeys = ['upy2cdecl', 'upy2cbody', 'upy2crtn']
+    upy2c = ts.cython_py2c("value", u)
+    kw.update([(k, indentstr(v or '')) for k, v in zip(upy2ckeys, upy2c)])
+    return _pyxpair.format(**kw)
+
+
+_pxdpair = """# Pair{tclsname}{uclsname}
+cdef class _Pair{tclsname}{uclsname}:
+    cdef pair[{tctype}, {uctype}] * pair_ptr
+    cdef public bint _free_pair
+
+
+"""
+def genpxd_pair(t, u, ts):
+    """Returns the pyd snippet for a pair of type <t, u>."""
+    t = ts.canon(t)
+    u = ts.canon(u)
+    return _pxdpair.format(tclsname=ts.cython_classname(t)[1],
+                          uclsname=ts.cython_classname(u)[1],
+                          thumname=ts.humanname(t)[1], uhumname=ts.humanname(u)[1],
+                          tctype=ts.cython_ctype(t), uctype=ts.cython_ctype(u),)
+
+
+_testpair = """#Pair{tclsname}{uclsname}
+def test_pair_{tfncname}_{ufncname}():
+    m = {stlcontainers}.Pair{tclsname}{uclsname}()
+    uismap = isinstance({5}, Mapping)
+    m[{0}] = {4}
+    m[{1}] = {5}
+    import pprint
+    pprint.pprint(m)
+    assert_equal(len(m), 2)
+    if uismap:
+        for key, value in m[{1}].items():
+            print(key, value, {5}[key])
+            if isinstance(value, np.ndarray):
+                assert{array}_equal(value, {5}[key])
+            else:
+                assert_equal(value, {5}[key])
+    else:
+        assert{array}_equal(m[{1}], {5})
+
+    m = {stlcontainers}.Map{tclsname}{uclsname}({{{2}: {6}, {3}: {7}}})
+    assert_equal(len(m), 2)
+    if uismap:
+        for key, value in m[{2}].items():
+            if isinstance(value, np.ndarray):
+                print(key, value, {6}[key])
+                assert{array}_equal(value, {6}[key])
+            else:
+                assert_equal(value, {6}[key])
+    else:
+        assert{array}_equal(m[{2}], {6})
+
+    n = {stlcontainers}.Map{tclsname}{uclsname}(m, False)
+    assert_equal(len(n), 2)
+    if uismap:
+        for key, value in m[{2}].items():
+            if isinstance(value, np.ndarray):
+                assert{array}_equal(value, {6}[key])
+            else:
+                assert_equal(value, {6}[key])
+    else:
+        assert{array}_equal(m[{2}], {6})
+
+    # points to the same underlying map
+    n[{1}] = {5}
+    if uismap:
+        for key, value in m[{1}].items():
+            if isinstance(value, np.ndarray):
+                assert{array}_equal(value, {5}[key])
+            else:
+                assert_equal(value, {5}[key])
+    else:
+        assert{array}_equal(m[{1}], {5})
+
+"""
+def gentest_pair(t, u, ts):
+    """Returns the test snippet for a paur of type t,u."""
+    t = ts.canon(t)
+    u = ts.canon(u)
+    if t not in testvals or u not in testvals:
+        return ""
+    ulowt = u
+    ulowu = u
+    while ulowu[-1] == 0:
+        ulowt, ulowu = ulowu[-3:-1]
+    a = '_array' if ulowt == 'vector' else ''
+    a += '_almost' if ulowu not in ['str', 'char'] else ''
+    if a != '' and "NPY_" not in ts.cython_nptype(ulowu):
+        return ""
+    return _testpair.format(*[repr(i) for i in testvals[t] + testvals[u][::-1]],
+                           tclsname=ts.cython_classname(t)[1],
+                           uclsname=ts.cython_classname(u)[1],
+                           tfncname=ts.cython_functionname(t)[1],
+                           ufncname=ts.cython_functionname(u)[1],
+                           array=a, stlcontainers=ts.stlcontainers)
+
+
+
+#
 # Maps
 #
 _pyxmap = '''# Map({tclsname}, {uclsname})
@@ -616,7 +795,7 @@ def genpyx(template, header=None, ts=None):
                 ts.cython_cimport_tuples(arg, cimport_tups)
         imports = "\n".join(ts.cython_import_lines(import_tups))
         cimports = "\n".join(ts.cython_cimport_lines(cimport_tups))
-        pyx = pyx.format(extra_types=ts.extra_types, cimports=cimports, 
+        pyx = pyx.format(extra_types=ts.extra_types, cimports=cimports,
                          imports=imports)
         for t in template:
             pyx += pyxfuncs[t[0]](*t[1:], ts=ts) + "\n\n" 
