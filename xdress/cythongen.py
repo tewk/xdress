@@ -19,7 +19,7 @@ import sys
 import math
 import warnings
 from copy import deepcopy
-from pprint import pprint
+from pprint import pprint, pformat
 
 from .utils import indent, indentstr, expand_default_args, isclassdesc, isfuncdesc, \
     isvardesc, newoverwrite, sortedbytype, _lang_exts
@@ -1020,6 +1020,14 @@ def _gen_function(name, name_mangled, args, rtn, ts, doc=None, inst_name="self._
         if fcbody is not None:
             func_call += indent(fcbody, join=False)
         func_rtn = indent("return {0}".format(fcrtn), join=False)
+        if name == 'getSegData':
+            print( name, rtn)
+            print( rtype_orig)
+            print( rtype)
+            print(fcdecl)
+            print(fcbody)
+            print(fcrtn)
+            print(fccached)
     else:
         func_call = indent(fcall, join=False)
         func_rtn = []
@@ -1551,6 +1559,13 @@ class XDressPlugin(Plugin):
         pyxs = genpyx(env, classes, ts=rc.ts, max_callbacks=rc.max_callbacks)
 
         # write out all files
+        for item_name, mod in env.items():
+            for item_name2, desc in mod.items():
+              if type(desc) is dict and item_name2 != 'extra':
+                  name = desc['name']['tarname']
+                  dname = name if isinstance(name, basestring) else rc.ts.cython_classname(name)[1]
+                  newoverwrite(pformat(desc), os.path.join(rc.packagedir, dname + ".desc_dump"))
+
         for key, cpppxd in cpppxds.items():
             newoverwrite(cpppxd, os.path.join(rc.packagedir,
                          env[key]['srcpxd_filename']), rc.verbose)
