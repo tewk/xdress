@@ -77,6 +77,30 @@ long_desc = "\n".join([l for l in long_desc.splitlines()
                        if ".. toctree::" not in l])
 long_desc = "\n".join([l for l in long_desc.splitlines()
                        if ":maxdepth:" not in l])
+def which(program):
+    import os
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+def find_llvm_config():
+    for x in ['llvm-config', 'llvm-config-3.2']: # + ['llvm-config-3.5', 'llvm-config-3.4', 'llvm-config-3.3]:
+        path = which(x)
+        if path:
+            return path
+    return None
 
 
 def setup():
@@ -105,8 +129,8 @@ def setup():
 
     clang_dir = os.path.join(dir_name, 'xdress', 'clang')
     clang_src_dir = os.path.join(clang_dir, 'src')
-    llvm_cppflags = subprocess.check_output(['llvm-config','--cppflags']).split()
-    llvm_ldflags = subprocess.check_output(['llvm-config','--ldflags','--libs']).split()
+    llvm_cppflags = subprocess.check_output([find_llvm_config(),'--cppflags']).split()
+    llvm_ldflags = subprocess.check_output([find_llvm_config(),'--ldflags','--libs']).split()
     clang_libs = '''clangTooling clangFrontend clangDriver clangSerialization clangCodeGen
                     clangParse clangSema clangStaticAnalyzerFrontend clangStaticAnalyzerCheckers
                     clangStaticAnalyzerCore clangAnalysis clangARCMigrate clangEdit
