@@ -102,9 +102,11 @@ def cpppxd_sorted_names(mod, ts):
             _addotherclsnames(atype, classes, name, othercls, ts)
         for mkey, mval in desc['methods'].items():
             mname, margs = mkey[0], mkey[1:]
-            _addotherclsnames(mval['return'], classes, name, othercls, ts)
-            for marg in margs:
-                _addotherclsnames(marg[1], classes, name, othercls, ts)
+            import collections
+            if mval and isinstance(mval, collections.Mapping):
+                _addotherclsnames(mval['return'], classes, name, othercls, ts)
+                for marg in margs:
+                    _addotherclsnames(marg[1], classes, name, othercls, ts)
     clssort.sort(key=lambda x: len(othercls[x]))
     names = clssort[:1]
     for name in clssort[1:]:
@@ -1341,69 +1343,71 @@ def classpyx(desc, classes=None, ts=None, max_callbacks=8):
     methitems += sorted(x for x in mitems if not isinstance(x[0][0], basestring))
     for mkey, mval in methitems:
         mname, margs = mkey[0], mkey[1:]
-        mrtn = mval['return']
-        mdefs = mval['defaults']
-        mbasename = mname if isinstance(mname, basestring) else mname[0]
-        mcyname = ts.cython_funcname(mname)
-        if mbasename.startswith('_'):
-            continue  # skip private
-        if any([a[1] is None or a[1][0] is None for a in margs]):
-            continue
-        if 1 < methcounts[mname]:
-            mname_mangled = "_{0}_{1}_{2:0{3}}".format(d['name'], mcyname,
-                    currcounts[mname], int(math.log(methcounts[mname], 10)+1)).lower()
-        else:
-            mname_mangled = mcyname
-        currcounts[mname] += 1
-        mangled_mnames[mkey] = mname_mangled
-        for a in margs:
-            ts.cython_import_tuples(a[1], import_tups)
-            ts.cython_cimport_tuples(a[1], cimport_tups)
-        minst_name, mcname = _method_instance_names(desc, classes, mkey, mrtn, ts)
-        if mcname != d['name']:
-            ts.cython_import_tuples(mcname, import_tups)
-            ts.cython_cimport_tuples(mcname, cimport_tups)
-        if mrtn is None:
-            # this must be a constructor
-            if mname not in (d['name'], '__init__',
-              srcname if isinstance(srcname, basestring) else srcname[:-1]):
-                continue  # skip destuctors
-            if 1 == methcounts[mname]:
-                mname_mangled = '__init__'
-                mangled_mnames[mkey] = mname_mangled
-            mdoc = desc.get('docstrings', {}).get('methods', {}).get(mname, '')
-            mdoc = _doc_add_sig(mdoc, mcyname, margs, mdefs)
-            construct = desc['construct']
-            if construct == 'struct':
-                cimport_tups.add(('libc.stdlib', 'malloc'))
-            clines += _gen_constructor(mcyname, mname_mangled, d['name'], margs,
-                        mdefs, ts, doc=mdoc,
-                        srcpxd_filename=desc['srcpxd_filename'],
-                        inst_name=minst_name, construct=construct)
-            if 1 < methcounts[mname] and currcounts[mname] == methcounts[mname]:
-                # write dispatcher
-                nm = {}
-                for k, v in mangled_mnames.items():
-                    if isinstance(k[0], basestring) and k[0] == mbasename:
-                        nm[k] = v
-                    elif k[0] == srcname[:-1]:
-                        nm[k] = v
-                clines += _gen_dispatcher('__init__', nm, ts, doc=mdoc, hasrtn=False)
-        else:
-            # this is a normal method
-            ts.cython_import_tuples(mrtn, import_tups)
-            ts.cython_cimport_tuples(mrtn, cimport_tups)
-            mdoc = desc.get('docstrings', {}).get('methods', {})\
-                                             .get(mname, nodocmsg.format(mname))
-            mdoc = _doc_add_sig(mdoc, mcyname, margs, mdefs)
-            mlines += _gen_function(mcyname, mname_mangled, margs, mrtn, mdefs,
-                                    ts, mdoc, inst_name=minst_name,
-                                    is_method=True)
-            if 1 < methcounts[mname] and currcounts[mname] == methcounts[mname]:
-                # write dispatcher
-                nm = dict([(k, v) for k, v in mangled_mnames.items() \
-                           if k[0] == mbasename])
-                mlines += _gen_dispatcher(mcyname, nm, ts, doc=mdoc)
+        import collections
+        if mval and isinstance(mval, collections.Mapping):
+            mrtn = mval['return']
+            mdefs = mval['defaults']
+            mbasename = mname if isinstance(mname, basestring) else mname[0]
+            mcyname = ts.cython_funcname(mname)
+            if mbasename.startswith('_'):
+                continue  # skip private
+            if any([a[1] is None or a[1][0] is None for a in margs]):
+                continue
+            if 1 < methcounts[mname]:
+                mname_mangled = "_{0}_{1}_{2:0{3}}".format(d['name'], mcyname,
+                        currcounts[mname], int(math.log(methcounts[mname], 10)+1)).lower()
+            else:
+                mname_mangled = mcyname
+            currcounts[mname] += 1
+            mangled_mnames[mkey] = mname_mangled
+            for a in margs:
+                ts.cython_import_tuples(a[1], import_tups)
+                ts.cython_cimport_tuples(a[1], cimport_tups)
+            minst_name, mcname = _method_instance_names(desc, classes, mkey, mrtn, ts)
+            if mcname != d['name']:
+                ts.cython_import_tuples(mcname, import_tups)
+                ts.cython_cimport_tuples(mcname, cimport_tups)
+            if mrtn is None:
+                # this must be a constructor
+                if mname not in (d['name'], '__init__',
+                  srcname if isinstance(srcname, basestring) else srcname[:-1]):
+                    continue  # skip destuctors
+                if 1 == methcounts[mname]:
+                    mname_mangled = '__init__'
+                    mangled_mnames[mkey] = mname_mangled
+                mdoc = desc.get('docstrings', {}).get('methods', {}).get(mname, '')
+                mdoc = _doc_add_sig(mdoc, mcyname, margs, mdefs)
+                construct = desc['construct']
+                if construct == 'struct':
+                    cimport_tups.add(('libc.stdlib', 'malloc'))
+                clines += _gen_constructor(mcyname, mname_mangled, d['name'], margs,
+                            mdefs, ts, doc=mdoc,
+                            srcpxd_filename=desc['srcpxd_filename'],
+                            inst_name=minst_name, construct=construct)
+                if 1 < methcounts[mname] and currcounts[mname] == methcounts[mname]:
+                    # write dispatcher
+                    nm = {}
+                    for k, v in mangled_mnames.items():
+                        if isinstance(k[0], basestring) and k[0] == mbasename:
+                            nm[k] = v
+                        elif k[0] == srcname[:-1]:
+                            nm[k] = v
+                    clines += _gen_dispatcher('__init__', nm, ts, doc=mdoc, hasrtn=False)
+            else:
+                # this is a normal method
+                ts.cython_import_tuples(mrtn, import_tups)
+                ts.cython_cimport_tuples(mrtn, cimport_tups)
+                mdoc = desc.get('docstrings', {}).get('methods', {})\
+                                                .get(mname, nodocmsg.format(mname))
+                mdoc = _doc_add_sig(mdoc, mcyname, margs, mdefs)
+                mlines += _gen_function(mcyname, mname_mangled, margs, mrtn, mdefs,
+                                        ts, mdoc, inst_name=minst_name,
+                                        is_method=True)
+                if 1 < methcounts[mname] and currcounts[mname] == methcounts[mname]:
+                    # write dispatcher
+                    nm = dict([(k, v) for k, v in mangled_mnames.items() \
+                              if k[0] == mbasename])
+                    mlines += _gen_dispatcher(mcyname, nm, ts, doc=mdoc)
     if 0 == len(desc['methods']) or 0 == len(clines):
         # provide a default constructor
         mdocs = desc.get('docstrings', {}).get('methods', {})

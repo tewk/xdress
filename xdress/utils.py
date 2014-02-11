@@ -92,18 +92,20 @@ def expand_default_args(methods):
     methitems = set()
     for mkey, mval in methods:
         mname, margs = mkey[0], mkey[1:]
-        mrtn = mval['return']
-        mdefargs = mval['defaults']
-        havedefaults = [arg is not Arg.NONE for arg in margs]
-        if any(havedefaults):
-            # expand default arguments
-            n = havedefaults.index(True)
-            items = [((mname,)+tuple(margs[:n]), mrtn)] + \
-                [((mname,)+tuple(margs[:i]), mrtn) for i in range(n+1,len(margs)+1)]
-            methitems.update(items)
-        else:
-            # no default args
-            methitems.add((mkey, mrtn))
+        import collections
+        if mval and isinstance(mval, collections.Mapping):
+            mrtn = mval['return']
+            mdefargs = mval['defaults']
+            havedefaults = [arg is not Arg.NONE for arg in margs]
+            if any(havedefaults):
+                # expand default arguments
+                n = havedefaults.index(True)
+                items = [((mname,)+tuple(margs[:n]), mrtn)] + \
+                    [((mname,)+tuple(margs[:i]), mrtn) for i in range(n+1,len(margs)+1)]
+                methitems.update(items)
+            else:
+                # no default args
+                methitems.add((mkey, mrtn))
     return methitems
 
 _bool_literals = {'true': True, 'false': False}
