@@ -1556,6 +1556,7 @@ def clang_describe_expression(exp):
         return s
     # Nothing worked, so bail
     kind = exp.kind.name
+    return s
     raise NotImplementedError('unhandled expression "{0}" of kind {1} at {2}'
         .format(s, kind, clang_str_location(exp.location)))
 
